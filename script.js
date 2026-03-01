@@ -75,12 +75,9 @@ fetchBtn.addEventListener('click', async () => {
 
 // ==================== YOUTUBE HANDLER ====================
 
-// ==================== YOUTUBE HANDLER (UPDATED) ====================
 async function handleYouTube(url) {
-    // 1. URL ko encode karna zaruri hai nayi API ke liye
     const encodedUrl = encodeURIComponent(url);
 
-    // 2. Nayi API ka URL (Maine 'farmat=mp3' hata diya hai taaki video aur audio dono aayein)
     const apiUrl = `https://youtube-video-audio-downloader-api2.p.rapidapi.com/?url=${encodedUrl}`;
     
     const response = await fetch(apiUrl, {
@@ -89,6 +86,50 @@ async function handleYouTube(url) {
             'x-rapidapi-host': 'youtube-video-audio-downloader-api2.p.rapidapi.com',
             'x-rapidapi-key': RAPID_API_KEY
         }
+    });
+
+    if (!response.ok) throw new Error("YouTube API fail ho gayi ya limit khatam.");
+    const data = await response.json();
+
+    const videoId = getYouTubeID(url);
+    const hdThumbnail = videoId
+        ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+        : "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800";
+
+    const title = data.title || data.video_title || "YouTube Video";
+    let buttons = [];
+
+    const mediaList = data.formats || data.links || data.medias || data.data || data.urls;
+
+    if (mediaList && Array.isArray(mediaList)) {
+        mediaList.forEach(media => {
+            if (media.url || media.link) {
+                const quality = media.quality || media.format || media.resolution || 'MP4';
+                const isAudio =
+                    quality.toLowerCase().includes('audio') ||
+                    quality.toLowerCase().includes('mp3') ||
+                    media.ext === 'mp3';
+
+                buttons.push({
+                    url: media.url || media.link,
+                    quality: quality,
+                    isAudio: isAudio
+                });
+            }
+        });
+    } else if (data.url || data.video_url || data.link) {
+        buttons.push({
+            url: data.url || data.video_url || data.link,
+            quality: 'Download',
+            isAudio: false
+        });
+    }
+
+    if (buttons.length === 0)
+        throw new Error("Is API ne video ka link nahi bheja.");
+
+    renderUI(title, hdThumbnail, buttons, "YouTube");
+   }
     });
 
     if (!response.ok) throw new Error("Nayi YouTube API fail ho gayi ya limit khatam.");
