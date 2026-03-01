@@ -8,8 +8,9 @@ const resultCard = document.getElementById('resultCard');
 
 const thumbImg = document.getElementById('thumbImg');
 const vidTitle = document.getElementById('vidTitle');
-const dlLink = document.getElementById('dlLink');
 const platformBadge = document.getElementById('platformBadge');
+const downloadOptions = document.getElementById('downloadOptions'); // Naya div
+const thumbBtn = document.getElementById('thumbBtn'); // Thumbnail button
 
 // Modal Elements
 const navAbout = document.getElementById('navAbout');
@@ -27,7 +28,6 @@ if (navAbout && aboutOverlay && closeAbout) {
         aboutOverlay.classList.remove('active');
     });
 
-    // Close when clicking outside the modal box
     aboutOverlay.addEventListener('click', (e) => {
         if (e.target === aboutOverlay) {
             aboutOverlay.classList.remove('active');
@@ -58,7 +58,6 @@ fetchBtn.addEventListener('click', async () => {
     try {
         const apiUrl = `https://${RAPID_API_HOST}/v1/social/autolink`;
         
-        // Calling API via POST method
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -71,25 +70,14 @@ fetchBtn.addEventListener('click', async () => {
 
         if (!response.ok) throw new Error("API Limit Reached or Invalid Link");
 
-        const data = await response.json();
-        console.log("Full API Data:", data);
+        const rawData = await response.json();
+        console.log("Full API Data:", rawData); // Isko browser console me check karna agar error aaye
 
-        // 🔍 Extracting Data from different API structures
-        let downloadUrl = null;
-        
-        if (data.medias && data.medias.length > 0) downloadUrl = data.medias[0].url; 
-        else if (data.video) downloadUrl = data.video;
-        else if (data.url) downloadUrl = data.url;
+        // SMART UNWRAPPER: API kabhi kabhi data ko 'data' ya 'result' object me bhejti hai
+        const data = rawData.data || rawData.result || rawData;
 
-        if (downloadUrl) {
-            showResult(
-                data.title || "Video Ready to Download", 
-                data.thumbnail || "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800", // Fallback Image
-                downloadUrl
-            );
-        } else {
-            throw new Error("Could not extract video link from this post.");
-        }
+        // Seedha Smart Parser (showResult) ko data bhej do
+        showResult(data);
 
     } catch (error) {
         showError(error.message || "Something went wrong. Try again.");
@@ -101,59 +89,89 @@ fetchBtn.addEventListener('click', async () => {
     }
 });
 
-        // ==================== HELPER FUNCTIONS (UPDATED) ====================
-        const downloadOptions = document.getElementById('downloadOptions');
-        const thumbBtn = document.getElementById('thumbBtn');
+// ==================== SUPER SMART PARSER ====================
+function showResult(data) {
+    // 1. Extract Title (3 jagah check karega)
+    vidTitle.innerText = data.title || data.desc || data.text || "Media Ready to Download";
+    
+    // 2. Extract Thumbnail (Har possible naam check karega)
+    const imgUrl = data.thumbnail || data.cover || data.image || data.picture || "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800";
+    thumbImg.src = imgUrl;
+    thumbBtn.href = imgUrl; // Thumbnail download button me set karna
 
-        // Note: Update your fetch block to call showResult(data) instead of showResult(title, img, url)
-        // I have handled that logic inside here directly.
+    // 3. Clear old buttons
+    downloadOptions.innerHTML = ''; 
 
-        function showResult(data) {
-            // 1. Set Title & Thumbnail
-            vidTitle.innerText = data.title || "Media Ready to Download";
-            const imgUrl = data.thumbnail || "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800";
-            thumbImg.src = imgUrl;
+    // 4. Find all possible media links (Arrays)
+    let mediaList = [];
+    if (data.medias && Array.isArray(data.medias)) mediaList = data.medias;
+    else if (data.links && Array.isArray(data.links)) mediaList = data.links;
+    else if (data.urls && Array.isArray(data.urls)) mediaList = data.urls;
+
+    if (mediaList.length > 0) {
+        // Agar API ne multiple options diye (1080p, 720p, MP3)
+        mediaList.forEach(media => {
+            const url = media.url || media.link || media.src;
+            if (!url) return;
+
+            const ext = (media.extension || media.type || 'mp4').toLowerCase();
+            const quality = media.quality || media.render || 'Standard';
+            const isAudio = ext === 'mp3' || quality.toLowerCase().includes('audio');
+
+            const btn = document.createElement('a');
+            btn.href = url;
+            btn.target = "_blank";
+            btn.className = isAudio ? 'btn-quality btn-audio' : 'btn-quality';
             
-            // 2. Set Thumbnail Download Link
-            thumbBtn.href = imgUrl;
-
-            // 3. Clear old buttons
-            downloadOptions.innerHTML = ''; 
-
-            // 4. Generate Quality & MP3 Buttons Dynamically
-            if (data.medias && data.medias.length > 0) {
-                data.medias.forEach(media => {
-                    // Check if the file is audio/mp3
-                    const isAudio = media.extension === 'mp3' || (media.quality && media.quality.toLowerCase().includes('audio'));
-                    
-                    const btn = document.createElement('a');
-                    btn.href = media.url;
-                    btn.target = "_blank";
-                    btn.className = isAudio ? 'btn-quality btn-audio' : 'btn-quality';
-                    
-                    btn.innerHTML = `
-                        <span>${isAudio ? '🎵 MP3 Audio' : '🎥 MP4 Video'}</span>
-                        <span>${media.quality || 'Standard'}</span>
-                    `;
-                    downloadOptions.appendChild(btn);
-                });
-            } else {
-                // Fallback (Agar API sirf 1 link de)
-                const fallbackUrl = data.video || data.url;
-                downloadOptions.innerHTML = `
-                    <a href="${fallbackUrl}" target="_blank" class="btn-quality">
-                        <span>🎥 MP4 Video</span><span>Standard Quality</span>
-                    </a>
-                `;
-            }
-            
-            // 5. Auto Detect Platform
-            const link = urlInput.value.toLowerCase();
-            if(link.includes('instagram.com')) platformBadge.innerText = "Instagram";
-            else if(link.includes('tiktok.com')) platformBadge.innerText = "TikTok";
-            else if(link.includes('youtube.com') || link.includes('youtu.be')) platformBadge.innerText = "YouTube";
-            else if(link.includes('twitter.com') || link.includes('x.com')) platformBadge.innerText = "X (Twitter)";
-            else platformBadge.innerText = "Social Video";
-
-            resultCard.style.display = 'block';
+            btn.innerHTML = `
+                <span>${isAudio ? '🎵 MP3 Audio' : '🎥 MP4 Video'}</span>
+                <span>${quality}</span>
+            `;
+            downloadOptions.appendChild(btn);
+        });
+    } else {
+        // Fallback: Agar API ne list nahi di, sirf single direct link diya
+        const singleVidUrl = data.video || data.url || data.nowatermark || data.watermark;
+        if (singleVidUrl) {
+            const btn = document.createElement('a');
+            btn.href = singleVidUrl;
+            btn.target = "_blank";
+            btn.className = 'btn-quality';
+            btn.innerHTML = `<span>🎥 MP4 Video</span><span>Download</span>`;
+            downloadOptions.appendChild(btn);
         }
+
+        // Agar MP3 audio alag se diya ho
+        if (data.audio) {
+            const btn = document.createElement('a');
+            btn.href = data.audio;
+            btn.target = "_blank";
+            btn.className = 'btn-quality btn-audio';
+            btn.innerHTML = `<span>🎵 MP3 Audio</span><span>Download</span>`;
+            downloadOptions.appendChild(btn);
+        }
+    }
+
+    // Agar koi link nahi mila
+    if (downloadOptions.innerHTML === '') {
+        showError("Could not extract video links from this post.");
+        return;
+    }
+    
+    // 5. Auto Detect Platform Badge
+    const link = urlInput.value.toLowerCase();
+    if(link.includes('instagram.com')) platformBadge.innerText = "Instagram";
+    else if(link.includes('tiktok.com')) platformBadge.innerText = "TikTok";
+    else if(link.includes('youtube.com') || link.includes('youtu.be')) platformBadge.innerText = "YouTube";
+    else if(link.includes('twitter.com') || link.includes('x.com')) platformBadge.innerText = "X (Twitter)";
+    else platformBadge.innerText = "Social Video";
+
+    // Show result card
+    resultCard.style.display = 'block';
+}
+
+function showError(msg) {
+    statusMsg.className = "msg error";
+    statusMsg.innerText = "⚠️ " + msg;
+    statusMsg.style.display = 'block';
+}
