@@ -6,7 +6,6 @@ const loader = document.getElementById('loader');
 const statusMsg = document.getElementById('statusMsg');
 const resultCard = document.getElementById('resultCard');
 
-// Result Card Elements
 const thumbImg = document.getElementById('thumbImg');
 const vidTitle = document.getElementById('vidTitle');
 const platformBadge = document.getElementById('platformBadge');
@@ -24,16 +23,11 @@ if (navAbout && aboutOverlay && closeAbout) {
         e.preventDefault();
         aboutOverlay.classList.add('active');
     });
-
     closeAbout.addEventListener('click', () => {
         aboutOverlay.classList.remove('active');
     });
-
-    // Bahar click karne pe modal band ho jaye
     aboutOverlay.addEventListener('click', (e) => {
-        if (e.target === aboutOverlay) {
-            aboutOverlay.classList.remove('active');
-        }
+        if (e.target === aboutOverlay) aboutOverlay.classList.remove('active');
     });
 }
 
@@ -41,16 +35,11 @@ if (navAbout && aboutOverlay && closeAbout) {
 const RAPID_API_KEY = "f273bac7c8msh2aa7a560484e824p115ce5jsn1087c9cd67e0";
 const RAPID_API_HOST = "social-download-all-in-one.p.rapidapi.com"; 
 
-// ==================== FETCH LOGIC (ALL-IN-ONE POST API) ====================
+// ==================== FETCH LOGIC ====================
 fetchBtn.addEventListener('click', async () => {
     const link = urlInput.value.trim();
-    
-    if (!link) {
-        showError("Bhai, pehle koi valid link toh daal!");
-        return;
-    }
+    if (!link) { showError("Bhai, pehle koi valid link toh daal!"); return; }
 
-    // 1. Loading Animation Shuru
     fetchBtn.disabled = true;
     btnText.style.display = 'none';
     loader.style.display = 'block';
@@ -59,8 +48,6 @@ fetchBtn.addEventListener('click', async () => {
 
     try {
         const apiUrl = `https://${RAPID_API_HOST}/v1/social/autolink`;
-        
-        // 2. API Call (POST Method)
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -74,87 +61,134 @@ fetchBtn.addEventListener('click', async () => {
         if (!response.ok) throw new Error("API Limit Reached ya Link Invalid hai.");
 
         const rawData = await response.json();
-        console.log("API Response:", rawData); // Browser console check karne ke liye
-
-        // 3. API ka Data Extract Karna (Smart Unwrapper)
+        console.log("API Data:", rawData); 
         const data = rawData.data || rawData.result || rawData;
 
-        // 4. Result UI mein bhejna
         showResult(data, link);
 
     } catch (error) {
         showError(error.message || "Kuch garbad ho gayi. Try again.");
     } finally {
-        // 5. Loading Animation Band
         fetchBtn.disabled = false;
         btnText.style.display = 'block';
         loader.style.display = 'none';
     }
 });
 
-// ==================== SUPER SMART UI RENDERER ====================
+// ==================== DIRECT DOWNLOAD HACK (CORS BYPASS) ====================
+async function forceDownload(url, filename, btnElement, fallbackIcon) {
+    const originalText = btnElement.innerHTML;
+    btnElement.innerHTML = `<span>⏳ Downloading...</span>`;
+    
+    try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+        btnElement.innerHTML = `<span>✅ Downloaded!</span>`;
+    } catch (e) {
+        console.log("CORS blocked Force Download, using fallback.", e);
+        // Fallback: Opens in new tab if browser blocks direct download
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        btnElement.innerHTML = originalText;
+    }
+    
+    // Reset button text after 3 seconds
+    setTimeout(() => { btnElement.innerHTML = originalText; }, 3000);
+}
+
+// ==================== SMART UI RENDERER ====================
 function showResult(data, originalLink) {
-    // 1. Title Set Karo
     vidTitle.innerText = data.title || data.desc || data.text || "Media Ready to Download";
     
-    // 2. Thumbnail Set Karo (YOUTUBE HD JUGAAD INCLUDED)
+    // Thumbnail setup (with YT Hack)
     let imgUrl = data.thumbnail || data.cover || data.image || "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800";
-    
-    // Agar YouTube ka link hai, toh HD photo direct server se nikal lo
     if (originalLink.toLowerCase().includes('youtu')) {
         const videoId = getYouTubeID(originalLink);
         if (videoId) imgUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
     }
-
     thumbImg.src = imgUrl;
-    thumbBtn.href = imgUrl; // Thumbnail download button set karna
 
-    // 3. Download Buttons Clear Karo
+    // Thumbnail Download Action
+    thumbBtn.onclick = (e) => {
+        e.preventDefault();
+        forceDownload(imgUrl, 'OmniSave_Thumbnail.jpg', thumbBtn, '🖼️');
+    };
+
     downloadOptions.innerHTML = ''; 
 
-    // 4. API se Quality aur MP3 Buttons Banao
-    let mediaList = data.medias || data.links || data.urls;
+    // Extract Media Array
+    let mediaList = data.medias || data.links || data.urls || [];
+    if (mediaList.length === 0 && data.video) mediaList.push({ url: data.video, type: 'mp4', quality: 'HD Video' });
 
-    if (mediaList && Array.isArray(mediaList) && mediaList.length > 0) {
-        mediaList.forEach(media => {
+    let validLinksCount = 0;
+
+    if (mediaList && Array.isArray(mediaList)) {
+        mediaList.forEach((media, index) => {
             const url = media.url || media.link || media.src;
             if (!url) return;
 
             const ext = (media.extension || media.type || 'mp4').toLowerCase();
-            const quality = media.quality || media.render || 'Standard';
-            const isAudio = ext === 'mp3' || quality.toLowerCase().includes('audio');
+            const quality = (media.quality || media.render || 'Standard').toLowerCase();
+            
+            const isImage = ext.includes('jpg') || ext.includes('png') || ext.includes('image') || quality.includes('image');
+            const isAudio = ext.includes('mp3') || quality.includes('audio');
 
+            // 🛑 FILTER BAD LINKS (avc1, vp9, raw formats that don't play audio)
+            if (!isImage && !isAudio) {
+                if (quality.includes('avc1') || quality.includes('vp9') || quality.includes('av01')) {
+                    return; // Skip this bad link
+                }
+            }
+
+            validLinksCount++;
             const btn = document.createElement('a');
             btn.href = url;
             btn.target = "_blank";
             btn.className = isAudio ? 'btn-quality btn-audio' : 'btn-quality';
             
-            btn.innerHTML = `
-                <span>${isAudio ? '🎵 MP3 Audio' : '🎥 MP4 Video'}</span>
-                <span>${quality}</span>
-            `;
+            // Text & Actions Logic
+            if (isImage) {
+                btn.innerHTML = `<span>🖼️ Image ${index + 1}</span><span>Download</span>`;
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    forceDownload(url, `OmniSave_Img_${index+1}.jpg`, btn, '🖼️');
+                };
+            } else if (isAudio) {
+                btn.innerHTML = `<span>🎵 MP3 Audio</span><span>${media.quality || 'Audio'}</span>`;
+                // Try force download for audio
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    forceDownload(url, `OmniSave_Audio.mp3`, btn, '🎵');
+                };
+            } else {
+                btn.innerHTML = `<span>🎥 MP4 Video</span><span>${media.quality || 'Standard'}</span>`;
+                // Video relies on normal download attribute (too heavy for blob fallback usually)
+                btn.download = "OmniSave_Video.mp4"; 
+            }
+            
             downloadOptions.appendChild(btn);
         });
-    } else {
-        // Fallback: Agar API ne direct ek single link diya ho
-        const singleVidUrl = data.video || data.url || data.nowatermark || data.watermark;
-        if (singleVidUrl) {
-            const btn = document.createElement('a');
-            btn.href = singleVidUrl;
-            btn.target = "_blank";
-            btn.className = 'btn-quality';
-            btn.innerHTML = `<span>🎥 MP4 Video</span><span>Download</span>`;
-            downloadOptions.appendChild(btn);
-        }
     }
 
-    // Check agar koi button nahi mila
-    if (downloadOptions.innerHTML === '') {
-        showError("Is video ka koi direct download link nahi mila.");
+    if (validLinksCount === 0) {
+        showError("Koi working video/audio link nahi mila. (Ya toh private post hai ya unsupported format).");
         return;
     }
     
-    // 5. Platform Badge Set Karo
+    // Platform Badge Set
     const linkForBadge = originalLink.toLowerCase();
     if(linkForBadge.includes('instagram.com')) platformBadge.innerText = "Instagram";
     else if(linkForBadge.includes('tiktok.com')) platformBadge.innerText = "TikTok";
@@ -162,11 +196,9 @@ function showResult(data, originalLink) {
     else if(linkForBadge.includes('twitter.com') || linkForBadge.includes('x.com')) platformBadge.innerText = "X (Twitter)";
     else platformBadge.innerText = "Social Video";
 
-    // 6. Result Card Show Karo
     resultCard.style.display = 'block';
 }
 
-// ==================== UTILS (HELPER FUNCTIONS) ====================
 function showError(msg) {
     statusMsg.className = "msg error";
     statusMsg.innerText = "⚠️ " + msg;
