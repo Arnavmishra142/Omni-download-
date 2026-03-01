@@ -74,19 +74,62 @@ fetchBtn.addEventListener('click', async () => {
 });
 
 // ==================== YOUTUBE HANDLER ====================
-async function handleYouTube(url) {
-    // 1. YouTube Video ID nikalna (Jugaad ke liye zaruri hai)
-    const videoId = getYouTubeID(url);
-    if (!videoId) throw new Error("YouTube link sahi nahi hai.");
 
-    // 2. Fetch Data from YTGrabber API (GET Method)
-    const apiUrl = `https://ytgrabber.p.rapidapi.com/app/get/${videoId}`;
+// ==================== YOUTUBE HANDLER (UPDATED) ====================
+async function handleYouTube(url) {
+    // 1. URL ko encode karna zaruri hai nayi API ke liye
+    const encodedUrl = encodeURIComponent(url);
+
+    // 2. Nayi API ka URL (Maine 'farmat=mp3' hata diya hai taaki video aur audio dono aayein)
+    const apiUrl = `https://youtube-video-audio-downloader-api2.p.rapidapi.com/?url=${encodedUrl}`;
+    
     const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
-            'x-rapidapi-host': 'ytgrabber.p.rapidapi.com',
+            'x-rapidapi-host': 'youtube-video-audio-downloader-api2.p.rapidapi.com',
             'x-rapidapi-key': RAPID_API_KEY
         }
+    });
+
+    if (!response.ok) throw new Error("Nayi YouTube API fail ho gayi ya limit khatam.");
+    const data = await response.json();
+    console.log("Nayi YouTube Data:", data); // Isko browser console me dekhna agar button na aaye
+
+    // 3. HD Thumbnail Jugaad (Bina API ke direct YouTube server se)
+    const videoId = getYouTubeID(url);
+    const hdThumbnail = videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800";
+
+    // 4. Extract Data based on what this new API returns
+    const title = data.title || data.video_title || "YouTube Video";
+    let buttons = [];
+
+    // Nayi API ka format decode karna (Smart check)
+    const mediaList = data.formats || data.links || data.medias || data.data || data.urls;
+    
+    if (mediaList && Array.isArray(mediaList)) {
+        mediaList.forEach(media => {
+            if(media.url || media.link) {
+                const quality = media.quality || media.format || media.resolution || 'MP4';
+                const isAudio = quality.toLowerCase().includes('audio') || quality.toLowerCase().includes('mp3') || media.ext === 'mp3';
+                
+                buttons.push({
+                    url: media.url || media.link,
+                    quality: quality,
+                    isAudio: isAudio
+                });
+            }
+        });
+    } else if (data.url || data.video_url || data.link) { 
+        // Agar API list na de aur sirf direct ek link de
+        buttons.push({ url: data.url || data.video_url || data.link, quality: 'Download', isAudio: false });
+    }
+
+    if (buttons.length === 0) throw new Error("Is API ne video ka link nahi bheja.");
+
+    // 5. UI Render karo (Ye function pehle se neeche likha hua hai tera)
+    renderUI(title, hdThumbnail, buttons, "YouTube");
+}
+
     });
 
     if (!response.ok) throw new Error("YouTube API fail ho gayi ya limit khatam.");
