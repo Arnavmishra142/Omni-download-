@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniSave | Universal Video Downloader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ==================== CSS RESET & VARIABLES ==================== */
+        :root {
+            --bg-color: #0d0d0f;
+            --surface-color: #1a1a1e;
+            --border-color: #2e2e34;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0ab;
+            --accent-color: #5c67f2;
+            --accent-hover: #4a54c4;
+            --error-color: #ef4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* ==================== MAIN CONTAINER ==================== */
+        .container {
+            width: 100%;
+            max-width: 560px;
+            text-align: center;
+        }
+
+        .header { margin-bottom: 40px; }
+        .logo { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; }
+        .logo span { color: var(--accent-color); }
+        .subtitle { color: var(--text-secondary); font-size: 15px; margin-top: 8px; }
+
+        /* ==================== INPUT SECTION ==================== */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: var(--surface-color);
+            padding: 24px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .input-wrapper { position: relative; }
+
+        input {
+            width: 100%;
+            padding: 16px 20px;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 15px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        input:focus { border-color: var(--accent-color); background: rgba(0,0,0,0.4); }
+        input::placeholder { color: #5a5a64; }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover { background: var(--accent-hover); }
+        button:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        /* ==================== LOADING SPINNER ==================== */
+        .loader {
+            width: 20px; height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ==================== RESULT SECTION ==================== */
+        .result-card {
+            margin-top: 24px;
+            background: var(--surface-color);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            display: none;
+            text-align: left;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .video-thumbnail {
+            width: 100%; height: 200px;
+            border-radius: 10px;
+            background-color: #222;
+            object-fit: cover;
+            margin-bottom: 15px;
+        }
+
+        .video-title { font-size: 16px; font-weight: 500; margin-bottom: 5px; line-height: 1.4; }
+        .platform-badge { display: inline-block; padding: 4px 10px; background: #2a2a32; border-radius: 20px; font-size: 12px; color: var(--text-secondary); margin-bottom: 15px; }
+        
+        .download-btn {
+            background: #ffffff; color: #000000;
+            text-decoration: none; display: flex;
+            padding: 12px; border-radius: 8px; justify-content: center; font-weight: 600;
+        }
+        .download-btn:hover { background: #e0e0e0; }
+
+        /* Messages */
+        .msg { margin-top: 15px; font-size: 14px; display: none; }
+        .msg.error { color: var(--error-color); display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <div class="logo">Omni<span>Save</span></div>
+            <div class="subtitle">Download from Instagram, TikTok, YouTube, X & more.</div>
+        </div>
+
+        <div class="input-group">
+            <div class="input-wrapper">
+                <input type="url" id="videoUrl" placeholder="Paste your video link here..." autocomplete="off">
+            </div>
+            <button id="fetchBtn">
+                <span id="btnText">Get Video</span>
+                <div class="loader" id="loader"></div>
+            </button>
+        </div>
+
+        <div id="statusMsg" class="msg"></div>
+
+        <div class="result-card" id="resultCard">
+            <img src="" alt="Video Thumbnail" class="video-thumbnail" id="thumbImg">
+            <div class="platform-badge" id="platformBadge">Video Ready</div>
+            <div class="video-title" id="vidTitle">Video Title goes here...</div>
+            <a href="#" target="_blank" class="download-btn" id="dlLink">⬇ Download MP4</a>
+        </div>
+    </div>
+
+    <script>
+        // ==================== DOM ELEMENTS ====================
+        const urlInput = document.getElementById('videoUrl');
+        const fetchBtn = document.getElementById('fetchBtn');
+        const btnText = document.getElementById('btnText');
+        const loader = document.getElementById('loader');
+        const statusMsg = document.getElementById('statusMsg');
+        const resultCard = document.getElementById('resultCard');
+        
+        const thumbImg = document.getElementById('thumbImg');
+        const vidTitle = document.getElementById('vidTitle');
+        const dlLink = document.getElementById('dlLink');
+        const platformBadge = document.getElementById('platformBadge');
+
+        // ==================== EXACT API CONFIGURATION ====================
+        const RAPID_API_KEY = "f273bac7c8msh2aa7a560484e824p115ce5jsn1087c9cd67e0";
+        const RAPID_API_HOST = "social-download-all-in-one.p.rapidapi.com"; 
+
+        // ==================== FETCH LOGIC (POST METHOD) ====================
+        fetchBtn.addEventListener('click', async () => {
+            const link = urlInput.value.trim();
+            
+            if (!link) {
+                showError("Please paste a valid link first.");
+                return;
+            }
+
+            // Start Loading Animation
+            fetchBtn.disabled = true;
+            btnText.style.display = 'none';
+            loader.style.display = 'block';
+            statusMsg.style.display = 'none';
+            resultCard.style.display = 'none';
+
+            try {
+                const apiUrl = `https://${RAPID_API_HOST}/v1/social/autolink`;
+                
+                // Calling API via POST method as per your cURL
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-rapidapi-host': RAPID_API_HOST,
+                        'x-rapidapi-key': RAPID_API_KEY
+                    },
+                    body: JSON.stringify({ url: link })
+                });
+
+                if (!response.ok) throw new Error("API Limit Reached or Invalid Link");
+
+                const data = await response.json();
+                console.log("Full API Data:", data); // Check Console if it fails!
+
+                // 🔍 Extracting Data from different API structures
+                let downloadUrl = null;
+                
+                // Typical structures for this API
+                if (data.medias && data.medias.length > 0) downloadUrl = data.medias[0].url; 
+                else if (data.video) downloadUrl = data.video;
+                else if (data.url) downloadUrl = data.url;
+
+                if (downloadUrl) {
+                    showResult(
+                        data.title || "Video Ready to Download", 
+                        data.thumbnail || "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800", // Fallback Image
+                        downloadUrl
+                    );
+                } else {
+                    throw new Error("Could not extract video link from this post.");
+                }
+
+            } catch (error) {
+                showError(error.message || "Something went wrong. Try again.");
+            } finally {
+                // Stop Loading Animation
+                fetchBtn.disabled = false;
+                btnText.style.display = 'block';
+                loader.style.display = 'none';
+            }
+        });
+
+        // ==================== HELPER FUNCTIONS ====================
+        function showResult(title, imgUrl, videoUrl) {
+            vidTitle.innerText = title;
+            thumbImg.src = imgUrl;
+            dlLink.href = videoUrl;
+            
+            // Auto Detect Platform
+            const link = urlInput.value.toLowerCase();
+            if(link.includes('instagram.com')) platformBadge.innerText = "Instagram";
+            else if(link.includes('tiktok.com')) platformBadge.innerText = "TikTok";
+            else if(link.includes('youtube.com') || link.includes('youtu.be')) platformBadge.innerText = "YouTube";
+            else if(link.includes('twitter.com') || link.includes('x.com')) platformBadge.innerText = "X (Twitter)";
+            else platformBadge.innerText = "Social Video";
+
+            resultCard.style.display = 'block';
+        }
+
+        function showError(msg) {
+            statusMsg.className = "msg error";
+            statusMsg.innerText = "⚠️ " + msg;
+            statusMsg.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
