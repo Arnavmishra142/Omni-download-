@@ -101,25 +101,59 @@ fetchBtn.addEventListener('click', async () => {
     }
 });
 
-// ==================== HELPER FUNCTIONS ====================
-function showResult(title, imgUrl, videoUrl) {
-    vidTitle.innerText = title;
-    thumbImg.src = imgUrl;
-    dlLink.href = videoUrl;
-    
-    // Auto Detect Platform
-    const link = urlInput.value.toLowerCase();
-    if(link.includes('instagram.com')) platformBadge.innerText = "Instagram";
-    else if(link.includes('tiktok.com')) platformBadge.innerText = "TikTok";
-    else if(link.includes('youtube.com') || link.includes('youtu.be')) platformBadge.innerText = "YouTube";
-    else if(link.includes('twitter.com') || link.includes('x.com')) platformBadge.innerText = "X (Twitter)";
-    else platformBadge.innerText = "Social Video";
+        // ==================== HELPER FUNCTIONS (UPDATED) ====================
+        const downloadOptions = document.getElementById('downloadOptions');
+        const thumbBtn = document.getElementById('thumbBtn');
 
-    resultCard.style.display = 'block';
-}
+        // Note: Update your fetch block to call showResult(data) instead of showResult(title, img, url)
+        // I have handled that logic inside here directly.
 
-function showError(msg) {
-    statusMsg.className = "msg error";
-    statusMsg.innerText = "⚠️ " + msg;
-    statusMsg.style.display = 'block';
-}
+        function showResult(data) {
+            // 1. Set Title & Thumbnail
+            vidTitle.innerText = data.title || "Media Ready to Download";
+            const imgUrl = data.thumbnail || "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800";
+            thumbImg.src = imgUrl;
+            
+            // 2. Set Thumbnail Download Link
+            thumbBtn.href = imgUrl;
+
+            // 3. Clear old buttons
+            downloadOptions.innerHTML = ''; 
+
+            // 4. Generate Quality & MP3 Buttons Dynamically
+            if (data.medias && data.medias.length > 0) {
+                data.medias.forEach(media => {
+                    // Check if the file is audio/mp3
+                    const isAudio = media.extension === 'mp3' || (media.quality && media.quality.toLowerCase().includes('audio'));
+                    
+                    const btn = document.createElement('a');
+                    btn.href = media.url;
+                    btn.target = "_blank";
+                    btn.className = isAudio ? 'btn-quality btn-audio' : 'btn-quality';
+                    
+                    btn.innerHTML = `
+                        <span>${isAudio ? '🎵 MP3 Audio' : '🎥 MP4 Video'}</span>
+                        <span>${media.quality || 'Standard'}</span>
+                    `;
+                    downloadOptions.appendChild(btn);
+                });
+            } else {
+                // Fallback (Agar API sirf 1 link de)
+                const fallbackUrl = data.video || data.url;
+                downloadOptions.innerHTML = `
+                    <a href="${fallbackUrl}" target="_blank" class="btn-quality">
+                        <span>🎥 MP4 Video</span><span>Standard Quality</span>
+                    </a>
+                `;
+            }
+            
+            // 5. Auto Detect Platform
+            const link = urlInput.value.toLowerCase();
+            if(link.includes('instagram.com')) platformBadge.innerText = "Instagram";
+            else if(link.includes('tiktok.com')) platformBadge.innerText = "TikTok";
+            else if(link.includes('youtube.com') || link.includes('youtu.be')) platformBadge.innerText = "YouTube";
+            else if(link.includes('twitter.com') || link.includes('x.com')) platformBadge.innerText = "X (Twitter)";
+            else platformBadge.innerText = "Social Video";
+
+            resultCard.style.display = 'block';
+        }
