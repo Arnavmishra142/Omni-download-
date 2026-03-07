@@ -31,15 +31,16 @@ if (navAbout && aboutOverlay && closeAbout) {
     });
 }
 
-// ==================== EXACT API CONFIGURATION ====================
-const RAPID_API_KEY = "f273bac7c8msh2aa7a560484e824p115ce5jsn1087c9cd67e0";
-const RAPID_API_HOST = "social-download-all-in-one.p.rapidapi.com"; 
+// ==================== COBALT API CONFIG ====================
+// 100% Free, No API Key Required!
+const COBALT_API_URL = "https://api.cobalt.tools/api/json";
 
 // ==================== FETCH LOGIC ====================
 fetchBtn.addEventListener('click', async () => {
     const link = urlInput.value.trim();
     if (!link) { showError("Bhai, pehle koi valid link toh daal!"); return; }
 
+    // UI Reset for Loading
     fetchBtn.disabled = true;
     btnText.style.display = 'none';
     loader.style.display = 'block';
@@ -47,22 +48,26 @@ fetchBtn.addEventListener('click', async () => {
     resultCard.style.display = 'none';
 
     try {
-        const apiUrl = `https://${RAPID_API_HOST}/v1/social/autolink`;
-        const response = await fetch(apiUrl, {
+        const response = await fetch(COBALT_API_URL, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'x-rapidapi-host': RAPID_API_HOST,
-                'x-rapidapi-key': RAPID_API_KEY
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ url: link })
+            body: JSON.stringify({ 
+                url: link,
+                vQuality: "1080", // 🔥 Force HD Quality
+                filenamePattern: "classic" 
+            })
         });
 
-        if (!response.ok) throw new Error("API Limit Reached ya Link Invalid hai.");
+        const data = await response.json();
+        console.log("Cobalt API Data:", data); 
 
-        const rawData = await response.json();
-        console.log("API Data:", rawData); 
-        const data = rawData.data || rawData.result || rawData;
+        // Cobalt sends status 'error' if link is invalid
+        if (data.status === 'error') {
+            throw new Error(data.text || "API Error: Invalid Link ya Private Video.");
+        }
 
         showResult(data, link);
 
@@ -75,130 +80,115 @@ fetchBtn.addEventListener('click', async () => {
     }
 });
 
-// ==================== DIRECT DOWNLOAD HACK (CORS BYPASS) ====================
-async function forceDownload(url, filename, btnElement, fallbackIcon) {
-    const originalText = btnElement.innerHTML;
-    btnElement.innerHTML = `<span>⏳ Downloading...</span>`;
-    
-    try {
-        const res = await fetch(url);
-        const blob = await res.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(blobUrl);
-        btnElement.innerHTML = `<span>✅ Downloaded!</span>`;
-    } catch (e) {
-        console.log("CORS blocked Force Download, using fallback.", e);
-        // Fallback: Opens in new tab if browser blocks direct download
-        const a = document.createElement('a');
-        a.href = url;
-        a.target = '_blank';
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        btnElement.innerHTML = originalText;
-    }
-    
-    // Reset button text after 3 seconds
-    setTimeout(() => { btnElement.innerHTML = originalText; }, 3000);
-}
 
 // ==================== SMART UI RENDERER ====================
 function showResult(data, originalLink) {
-    vidTitle.innerText = data.title || data.desc || data.text || "Media Ready to Download";
     
-    // Thumbnail setup (with YT Hack)
-    let imgUrl = data.thumbnail || data.cover || data.image || "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800";
-    if (originalLink.toLowerCase().includes('youtu')) {
+    // 1. Identify Platform for Badge
+    const linkForBadge = originalLink.toLowerCase();
+    let platformName = "Social Video";
+    if(linkForBadge.includes('instagram.com')) platformName = "Instagram";
+    else if(linkForBadge.includes('tiktok.com')) platformName = "TikTok";
+    else if(linkForBadge.includes('youtube.com') || linkForBadge.includes('youtu.be')) platformName = "YouTube";
+    else if(linkForBadge.includes('twitter.com') || linkForBadge.includes('x.com')) platformName = "X (Twitter)";
+    else if(linkForBadge.includes('reddit.com')) platformName = "Reddit";
+    else if(linkForBadge.includes('pinterest.com')) platformName = "Pinterest";
+
+    platformBadge.innerText = platformName;
+    vidTitle.innerText = `${platformName} Media Ready!`;
+
+    // 2. Thumbnail Logic (YT Hack + Fallback)
+    let imgUrl = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800";
+    if (platformName === "YouTube") {
         const videoId = getYouTubeID(originalLink);
         if (videoId) imgUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    } else if (data.thumbnail) {
+        imgUrl = data.thumbnail;
     }
     thumbImg.src = imgUrl;
 
-    // Thumbnail Download Action
     thumbBtn.onclick = (e) => {
         e.preventDefault();
-        forceDownload(imgUrl, 'OmniSave_Thumbnail.jpg', thumbBtn, '🖼️');
+        window.open(imgUrl, '_blank');
     };
 
     downloadOptions.innerHTML = ''; 
 
-    // Extract Media Array
-    let mediaList = data.medias || data.links || data.urls || [];
-    if (mediaList.length === 0 && data.video) mediaList.push({ url: data.video, type: 'mp4', quality: 'HD Video' });
-
-    let validLinksCount = 0;
-
-    if (mediaList && Array.isArray(mediaList)) {
-        mediaList.forEach((media, index) => {
-            const url = media.url || media.link || media.src;
-            if (!url) return;
-
-            const ext = (media.extension || media.type || 'mp4').toLowerCase();
-            const quality = (media.quality || media.render || 'Standard').toLowerCase();
-            
-            const isImage = ext.includes('jpg') || ext.includes('png') || ext.includes('image') || quality.includes('image');
-            const isAudio = ext.includes('mp3') || quality.includes('audio');
-
-            // 🛑 FILTER BAD LINKS (avc1, vp9, raw formats that don't play audio)
-            if (!isImage && !isAudio) {
-                if (quality.includes('avc1') || quality.includes('vp9') || quality.includes('av01')) {
-                    return; // Skip this bad link
-                }
-            }
-
-            validLinksCount++;
-            const btn = document.createElement('a');
-            btn.href = url;
-            btn.target = "_blank";
-            btn.className = isAudio ? 'btn-quality btn-audio' : 'btn-quality';
-            
-            // Text & Actions Logic
-            if (isImage) {
-                btn.innerHTML = `<span>🖼️ Image ${index + 1}</span><span>Download</span>`;
-                btn.onclick = (e) => {
-                    e.preventDefault();
-                    forceDownload(url, `OmniSave_Img_${index+1}.jpg`, btn, '🖼️');
-                };
-            } else if (isAudio) {
-                btn.innerHTML = `<span>🎵 MP3 Audio</span><span>${media.quality || 'Audio'}</span>`;
-                // Try force download for audio
-                btn.onclick = (e) => {
-                    e.preventDefault();
-                    forceDownload(url, `OmniSave_Audio.mp3`, btn, '🎵');
-                };
-            } else {
-                btn.innerHTML = `<span>🎥 MP4 Video</span><span>${media.quality || 'Standard'}</span>`;
-                // Video relies on normal download attribute (too heavy for blob fallback usually)
-                btn.download = "OmniSave_Video.mp4"; 
-            }
-            
-            downloadOptions.appendChild(btn);
-        });
+    // 3. Extract Links (Cobalt handles single videos and carousels/slides differently)
+    let mediaList = [];
+    
+    // Agar Instagram post mein multiple photos/videos hain (Carousel)
+    if (data.status === "picker" && data.picker) {
+        mediaList = data.picker.map(item => ({ url: item.url, type: item.type }));
+    } 
+    // Agar single video hai
+    else if (data.url) {
+        mediaList = [{ url: data.url, type: 'video' }];
     }
 
-    if (validLinksCount === 0) {
-        showError("Koi working video/audio link nahi mila. (Ya toh private post hai ya unsupported format).");
+    if (mediaList.length === 0) {
+        showError("Koi working media link nahi mila.");
         return;
     }
-    
-    // Platform Badge Set
-    const linkForBadge = originalLink.toLowerCase();
-    if(linkForBadge.includes('instagram.com')) platformBadge.innerText = "Instagram";
-    else if(linkForBadge.includes('tiktok.com')) platformBadge.innerText = "TikTok";
-    else if(linkForBadge.includes('youtube.com') || linkForBadge.includes('youtu.be')) platformBadge.innerText = "YouTube";
-    else if(linkForBadge.includes('twitter.com') || linkForBadge.includes('x.com')) platformBadge.innerText = "X (Twitter)";
-    else platformBadge.innerText = "Social Video";
+
+    // 4. Generate Buttons
+    mediaList.forEach((media, index) => {
+        const btn = document.createElement('a');
+        btn.href = media.url;
+        btn.target = "_blank"; // Direct open/download
+        
+        if (media.type === 'photo' || media.type === 'image') {
+            btn.className = 'btn-quality';
+            btn.innerHTML = `<span>🖼️ Image ${index + 1}</span><span>HD</span>`;
+        } else {
+            btn.className = 'btn-quality';
+            btn.innerHTML = `<span>🎥 MP4 Video ${mediaList.length > 1 ? index + 1 : ''}</span><span>HD 1080p</span>`;
+        }
+        
+        downloadOptions.appendChild(btn);
+    });
+
+    // 5. BONUS FEATURE: Extract MP3 Audio button for single videos!
+    if (mediaList.length === 1 && mediaList[0].type === 'video') {
+        const audioBtn = document.createElement('button');
+        audioBtn.className = 'btn-quality btn-audio';
+        audioBtn.style.cursor = 'pointer';
+        audioBtn.style.border = 'none';
+        audioBtn.style.width = '100%';
+        audioBtn.innerHTML = `<span>🎵 Extract MP3 Audio</span><span>Tap to get</span>`;
+        
+        audioBtn.onclick = () => fetchAudioOnly(originalLink, audioBtn);
+        downloadOptions.appendChild(audioBtn);
+    }
 
     resultCard.style.display = 'block';
 }
 
+// ==================== AUDIO EXTRACTION LOGIC ====================
+async function fetchAudioOnly(link, btnElement) {
+    btnElement.innerHTML = `<span>⏳ Processing Audio...</span>`;
+    btnElement.disabled = true;
+    try {
+        const response = await fetch(COBALT_API_URL, {
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: link, isAudioOnly: true }) // Cobalt special feature
+        });
+        const data = await response.json();
+        
+        if (data.url) {
+            btnElement.innerHTML = `<span>✅ Audio Ready! Click Here</span>`;
+            btnElement.onclick = () => window.open(data.url, '_blank');
+            btnElement.disabled = false;
+        } else {
+            throw new Error();
+        }
+    } catch(e) {
+        btnElement.innerHTML = `<span>❌ Audio Failed</span>`;
+    }
+}
+
+// ==================== HELPERS ====================
 function showError(msg) {
     statusMsg.className = "msg error";
     statusMsg.innerText = "⚠️ " + msg;
