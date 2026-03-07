@@ -31,9 +31,10 @@ if (navAbout && aboutOverlay && closeAbout) {
     });
 }
 
-// ==================== COBALT API CONFIG ====================
-// 100% Free, No API Key Required!
-const COBALT_API_URL = "https://api.cobalt.tools/api/json";
+// ==================== COBALT API CONFIG (WITH CORS PROXY) ====================
+// Proxy laga di taaki browser ya API isko block na kare!
+const COBALT_API_URL = "https://corsproxy.io/?https://api.cobalt.tools/api/json";
+
 
 // ==================== FETCH LOGIC ====================
 fetchBtn.addEventListener('click', async () => {
